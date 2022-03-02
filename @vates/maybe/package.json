@@ -1,0 +1,30 @@
+{
+  "private": true,
+  "name": "@vates/maybe",
+  "description": "Minimal Maybe/Option monad to help handling optional values",
+  "keywords": [
+    "just",
+    "maybe",
+    "monad",
+    "none",
+    "nothing",
+    "option",
+    "some"
+  ],
+  "homepage": "https://github.com/vatesfr/xen-orchestra/tree/master/@vates/maybe",
+  "bugs": "https://github.com/vatesfr/xen-orchestra/issues",
+  "repository": {
+    "directory": "@vates/maybe",
+    "type": "git",
+    "url": "https://github.com/vatesfr/xen-orchestra.git"
+  },
+  "author": {
+    "name": "Vates SAS",
+    "url": "https://vates.fr"
+  },
+  "license": "ISC",
+  "version": "0.0.0",
+  "engines": {
+    "node": ">=8.10"
+  }
+}
