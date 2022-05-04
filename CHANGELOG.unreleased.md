@@ -7,6 +7,8 @@
 
 > Users must be able to say: “Nice enhancement, I'm eager to test it”
 
+- [Tasks] Show tasks for Self Service users (PR [#6217](https://github.com/vatesfr/xen-orchestra/pull/6217))
+
 ### Bug fixes
 
 > Users must be able to say: “I had this issue, happy to know it's fixed”
@@ -33,5 +35,6 @@
 
 <!--packages-start-->
 
+- xo-web minor
 
 <!--packages-end-->
