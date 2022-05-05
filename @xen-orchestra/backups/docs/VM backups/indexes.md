@@ -22,7 +22,10 @@ With the following structure:
 
 On demand in `RemoteAdapter#listVmBackups`.
 
-It should be properly synchronized with `handler.lock(vmBackupDir/cache.json.gz`.
+It should be properly synchronized with `handler.lock(vmBackupDir/cache.json.gz)`:
+
+- if missing: acquire lock
+- when lock acquired: retry reading it and if missing, generates it
 
 ### Invalidation
 
