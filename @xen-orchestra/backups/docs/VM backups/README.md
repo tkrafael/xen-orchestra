@@ -14,7 +14,7 @@
 └─ xo-vm-backups
   ├─ index.json // TODO
   └─ <VM UUID>
-     ├─ index.json // TODO
+     ├─ cache.json.gz
      ├─ vdis
      │  └─ <job UUID>
      │     └─ <VDI UUID>
