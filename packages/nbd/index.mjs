@@ -3,6 +3,7 @@ import { Xapi } from 'xen-api'
 import readline from 'node:readline'
 import { stdin as input, stdout as output } from 'node:process'
 import { asyncMap } from '@xen-orchestra/async-map'
+import { asyncEach } from '@vates/async-each'
 
 const xapi = new Xapi({
   auth: {
@@ -89,10 +90,12 @@ for (const index in snapshots) {
 const recentSnapshotIndex = await question(recentSnapshotQuestion + '\n')
 
 console.log('will get bitmap of changed blocks')
-const cbt = await xapi.call(
-  'VDI.list_changed_blocks',
-  await xapi.getObject(snapshots[refSnapshotIndex - 1].uuid).$ref,
-  await xapi.getObject(snapshots[recentSnapshotIndex - 1].uuid).$ref
+const cbt = Buffer.from(
+  await xapi.call(
+    'VDI.list_changed_blocks',
+    await xapi.getObject(snapshots[refSnapshotIndex - 1].uuid).$ref,
+    await xapi.getObject(snapshots[recentSnapshotIndex - 1].uuid).$ref
+  )
 )
 console.log('got it')
 
@@ -102,10 +105,28 @@ await client.connect()
 
 let nbModified = 0
 const start = new Date()
-for await (const block of client.getChangedBlock(Buffer.from(cbt))) {
-  console.log('got block ', block.data.length)
-  nbModified++
+
+const MASK = 0x80
+const test = (map, bit) => ((map[bit >> 3] << (bit & 7)) & MASK) !== 0
+const changed = []
+for (let i = 0; i < cbt.length * 8; i++) {
+  if (test(cbt, i)) {
+    changed.push(i)
+  }
 }
+console.log(changed.length, 'block changed')
+await asyncEach(
+  changed,
+  async blockIndex => {
+    console.log('will read', blockIndex)
+    await client.readBlock(blockIndex)
+    console.log('read', blockIndex)
+    nbModified++
+  },
+  {
+    concurrency: 4,
+  }
+)
 
 console.log('duration :', new Date() - start)
 console.log('modified blocks : ', nbModified)

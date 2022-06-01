@@ -1,6 +1,7 @@
 import assert from 'node:assert'
 import { Socket } from 'node:net'
 
+const BLOCK_SIZE = 64 * 1024
 export default class NbdClient {
   #address
   #cert
@@ -11,6 +12,8 @@ export default class NbdClient {
   #readPromiseResolve
   #waitingForLength = 0
   #nbDiskBlocks = 0
+
+  #queries = {}
   constructor({ address, port = 10809, exportname, cert }) {
     this.#address = address
     this.#port = port
@@ -27,13 +30,26 @@ export default class NbdClient {
         resolve()
       })
 
-      client.on('data', data => {
+      client.on('data', async data => {
         this.#buffer = Buffer.concat([this.#buffer, Buffer.from(data)])
 
         if (this.#readPromiseResolve && this.#buffer.length >= this.#waitingForLength) {
           this.#readPromiseResolve(this.#takeFromBuffer(this.#waitingForLength))
           this.#readPromiseResolve = null
           this.#waitingForLength = 0
+        } else {
+          if (!this.#readPromiseResolve && this.#buffer.length > 4) {
+            if (this.#buffer.readInt32BE(0) === 0x67446698) {
+              console.log(Object.keys(this.#queries).length)
+              const response = await this.#readResponse()
+              if (this.#queries[response.handle]) {
+                this.#queries[response.handle](response)
+                delete this.#queries[response.handle]
+              } else {
+                console.log('no query associated with handle ', response.handle)
+              }
+            }
+          }
         }
       })
 
@@ -122,22 +138,7 @@ export default class NbdClient {
     return this.#writeToSocket(buffer)
   }
 
-  async getChangedBlockTracking(vdiFrom, vdiTo) {
-    //
-  }
-
-  async readBlock(index) {
-    const start = new Date()
-    //this.#buffer = Buffer.alloc(0)=
-    const BLOCK_SIZE = 64 * 1024
-    const handle = BigInt(Math.floor(Math.random() * BLOCK_SIZE))
-    await this.#writeToSocketInt32(0x25609513) //NBD_REQUEST MAGIC
-    await this.#writeToSocketInt16(0) //command flags
-    await this.#writeToSocketInt16(0) //READ
-    await this.#writeToSocketInt64(handle)
-    await this.#writeToSocketInt64(BigInt(index) * BigInt(BLOCK_SIZE))
-    await this.#writeToSocketUInt32(BLOCK_SIZE)
-
+  async #readResponse() {
     //NBD_SIMPLE_REPLY_MAGIC
     const magic = await this.#readFromSocketInt32()
 
@@ -152,54 +153,31 @@ export default class NbdClient {
       return
     }
     // handle
-    const handleAnswer = await this.#readFromSocketInt64()
+    const handle = await this.#readFromSocketInt64()
     //assert(handleAnswer, handle) // handle did not changed
     // data
-    return await this.#readFromSocket(BLOCK_SIZE)
+    return {
+      handle: handle,
+      data: await this.#readFromSocket(BLOCK_SIZE),
+    }
   }
 
-  async *getChangedBlock(changedBlocks) {
-    const MASK = 0x80
-    const test = (map, bit) => ((map[bit >> 3] << (bit & 7)) & MASK) !== 0
-    console.log('getChangedBlock', changedBlocks.length * 8, this.#nbDiskBlocks)
-    let blockIndex = 0
-    for (let i = 0; i < this.#nbDiskBlocks; i++) {
-      if (changedBlocks.readUInt8(Math.floor(i / 8)) !== 65 && test(changedBlocks, i)) {
-        //console.log('change in ',blockIndex)
-        console.log(i, changedBlocks.readUInt8(Math.floor(i / 8)), i % 8)
-        const data = await this.readBlock(blockIndex)
-        yield {
-          index: blockIndex,
-          data,
-        }
-        /*const data = await this.readBlock(blockIndex)
-        yield {
-          index: blockIndex,
-          data
-        }*/
-      } else {
-        //  console.log('.')
-      }
-      blockIndex++
+  async readBlock(index) {
+    if (index > this.#nbDiskBlocks) {
+      return null
     }
-    /*
-    for(let byteIndex =0; byteIndex < changedBlocks.length; byteIndex++ ){
-      const byte = changedBlocks.readUInt8(byteIndex)
 
-      for(let bitIndex = 0;  bitIndex < 8; bitIndex ++){
-        if(test(changedBlocks,byteIndex*8 +  bitIndex)){
-          //console.log('change in ',blockIndex)
-          console.log(byteIndex*8 +  bitIndex, byte, bitIndex, byte>>bitIndex, (byte>>bitIndex) % 2)
+    //this.#buffer = Buffer.alloc(0)=
+    const handle = BigInt(Math.floor(Math.random() * BLOCK_SIZE))
+    this.#writeToSocketInt32(0x25609513) //NBD_REQUEST MAGIC
+    this.#writeToSocketInt16(0) //command flags
+    this.#writeToSocketInt16(0) //READ
+    this.#writeToSocketInt64(handle)
+    this.#writeToSocketInt64(BigInt(index) * BigInt(BLOCK_SIZE))
+    this.#writeToSocketUInt32(BLOCK_SIZE)
 
-          const data = await this.readBlock(blockIndex)
-          yield {
-            index: blockIndex,
-            data
-          }
-        }
-        blockIndex ++
-      }
-    }*/
-    console.log('total blocks ', blockIndex)
+    return new Promise(resolve => {
+      this.#queries[handle] = response => resolve(response.data)
+    })
   }
 }
